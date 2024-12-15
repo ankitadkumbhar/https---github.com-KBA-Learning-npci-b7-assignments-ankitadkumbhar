@@ -1,0 +1,47 @@
+
+********************************CreateFood********************************
+POST  http://localhost:3000/api/food
+
+{
+  "foodId": "food123",
+  "type": "Organic Rice",
+  "origin": "India",
+  "quantity": "100kg",
+  "status": "Harvested",
+  "owner": "Farmer"
+}
+
+********************************ReadFood********************************
+GET  http://localhost:3000/api/food/food123
+
+********************************RegisterFood ********************************
+POST http://localhost:3000/api/food/register
+
+{
+  "foodId": "food123",
+  "ownerName": "Retailer Name",
+  "registrationNumber": "KL-1234"
+}
+
+********************************GetAllFoods ********************************
+
+POST  http://localhost:3000/api/food/all
+
+********************************Create Order ********************************
+
+POST  http://localhost:3000/api/order
+
+{
+  "OrderID": "12345",
+  "DistributorName": "ABC Distributors",
+  "ProductID": "P001",
+  "Quantity": "100",
+  "Status": "Pending"
+}
+
+********************************Read Order ********************************
+
+GET   http://localhost:3000/api/order/2
+
+********************************GetAllOrders ********************************
+GET      http://localhost:3000/api/allorders

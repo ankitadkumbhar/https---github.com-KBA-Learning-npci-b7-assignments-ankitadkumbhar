@@ -1,0 +1,10 @@
+[
+    {
+      "name": "OrderCollection",
+      "policy": "OR('FarmerMSP.member', 'DistributorMSP.member')",
+      "requiredPeerCount": 1,
+      "maxPeerCount": 1,
+      "blockToLive": 100,
+      "memberOnlyRead": true
+    }
+]

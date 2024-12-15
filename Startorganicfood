@@ -1,0 +1,492 @@
+export FABRIC_CFG_PATH=./config
+
+export CHANNEL_NAME=organicchannel
+
+
+configtxgen -profile ThreeOrgsChannel -outputBlock ./channel-artifacts/${CHANNEL_NAME}.block -channelID $CHANNEL_NAME
+
+
+
+export ORDERER_CA=./organizations/ordererOrganizations/auto.com/orderers/orderer.auto.com/msp/tlscacerts/tlsca.auto.com-cert.pem
+
+export ORDERER_ADMIN_TLS_SIGN_CERT=./organizations/ordererOrganizations/auto.com/orderers/orderer.auto.com/tls/server.crt
+
+export ORDERER_ADMIN_TLS_PRIVATE_KEY=./organizations/ordererOrganizations/auto.com/orderers/orderer.auto.com/tls/server.key
+
+
+
+
+osnadmin channel join --channelID $CHANNEL_NAME --config-block ./channel-artifacts/$CHANNEL_NAME.block -o localhost:7053 --ca-file $ORDERER_CA --client-cert $ORDERER_ADMIN_TLS_SIGN_CERT --client-key $ORDERER_ADMIN_TLS_PRIVATE_KEY
+
+
+osnadmin channel list -o localhost:7053 --ca-file $ORDERER_CA --client-cert $ORDERER_ADMIN_TLS_SIGN_CERT --client-key $ORDERER_ADMIN_TLS_PRIVATE_KEY
+
+
+
+-------------Farmer Org-------
+
+export FABRIC_CFG_PATH=./peercfg
+export CHANNEL_NAME=organicchannel
+export CORE_PEER_LOCALMSPID=FarmerMSP
+export CORE_PEER_TLS_ENABLED=true
+export CORE_PEER_TLS_ROOTCERT_FILE=${PWD}/organizations/peerOrganizations/farmer.auto.com/peers/peer0.farmer.auto.com/tls/ca.crt
+export CORE_PEER_MSPCONFIGPATH=${PWD}/organizations/peerOrganizations/farmer.auto.com/users/Admin@farmer.auto.com/msp
+export CORE_PEER_ADDRESS=localhost:7051
+export ORDERER_CA=${PWD}/organizations/ordererOrganizations/auto.com/orderers/orderer.auto.com/msp/tlscacerts/tlsca.auto.com-cert.pem
+export FARMER_PEER_TLSROOTCERT=${PWD}/organizations/peerOrganizations/farmer.auto.com/peers/peer0.farmer.auto.com/tls/ca.crt
+export DISTRIBUTOR_PEER_TLSROOTCERT=${PWD}/organizations/peerOrganizations/distributor.auto.com/peers/peer0.distributor.auto.com/tls/ca.crt
+export RETAILER_PEER_TLSROOTCERT=${PWD}/organizations/peerOrganizations/retailer.auto.com/peers/peer0.retailer.auto.com/tls/ca.crt
+
+
+
+------------Distributor Org------
+
+export FABRIC_CFG_PATH=./peercfg
+export CHANNEL_NAME=organicchannel 
+export CORE_PEER_LOCALMSPID=DistributorMSP 
+export CORE_PEER_TLS_ENABLED=true
+export CORE_PEER_ADDRESS=localhost:9051 
+export CORE_PEER_TLS_ROOTCERT_FILE=${PWD}/organizations/peerOrganizations/distributor.auto.com/peers/peer0.distributor.auto.com/tls/ca.crt
+export CORE_PEER_MSPCONFIGPATH=${PWD}/organizations/peerOrganizations/distributor.auto.com/users/Admin@distributor.auto.com/msp
+export ORDERER_CA=${PWD}/organizations/ordererOrganizations/auto.com/orderers/orderer.auto.com/msp/tlscacerts/tlsca.auto.com-cert.pem
+export FARMER_PEER_TLSROOTCERT=${PWD}/organizations/peerOrganizations/farmer.auto.com/peers/peer0.farmer.auto.com/tls/ca.crt
+export DISTRIBUTOR_PEER_TLSROOTCERT=${PWD}/organizations/peerOrganizations/distributor.auto.com/peers/peer0.distributor.auto.com/tls/ca.crt
+export RETAILER_PEER_TLSROOTCERT=${PWD}/organizations/peerOrganizations/retailer.auto.com/peers/peer0.retailer.auto.com/tls/ca.crt
+
+
+
+
+-----------Retailer Org----------
+
+
+export FABRIC_CFG_PATH=./peercfg
+export CHANNEL_NAME=organicchannel 
+export CORE_PEER_LOCALMSPID=RetailerMSP 
+export CORE_PEER_TLS_ENABLED=true
+export CORE_PEER_ADDRESS=localhost:11051 
+export CORE_PEER_TLS_ROOTCERT_FILE=${PWD}/organizations/peerOrganizations/retailer.auto.com/peers/peer0.retailer.auto.com/tls/ca.crt
+export CORE_PEER_MSPCONFIGPATH=${PWD}/organizations/peerOrganizations/retailer.auto.com/users/Admin@retailer.auto.com/msp
+export ORDERER_CA=${PWD}/organizations/ordererOrganizations/auto.com/orderers/orderer.auto.com/msp/tlscacerts/tlsca.auto.com-cert.pem
+export FARMER_PEER_TLSROOTCERT=${PWD}/organizations/peerOrganizations/farmer.auto.com/peers/peer0.farmer.auto.com/tls/ca.crt
+export DISTRIBUTOR_PEER_TLSROOTCERT=${PWD}/organizations/peerOrganizations/distributor.auto.com/peers/peer0.distributor.auto.com/tls/ca.crt
+export RETAILER_PEER_TLSROOTCERT=${PWD}/organizations/peerOrganizations/retailer.auto.com/peers/peer0.retailer.auto.com/tls/ca.crt
+
+
+
+
+
+
+—-------------------- anchor peer update —---------------------
+**************** peer0_Farmer terminal ******************
+
+
+
+peer channel fetch config channel-artifacts/config_block.pb -o localhost:7050 --ordererTLSHostnameOverride orderer.auto.com -c $CHANNEL_NAME --tls --cafile $ORDERER_CA
+
+cd channel-artifacts
+
+configtxlator proto_decode --input config_block.pb --type common.Block --output config_block.json
+jq '.data.data[0].payload.data.config' config_block.json > config.json
+
+cp config.json config_copy.json
+
+jq '.channel_group.groups.Application.groups.FarmerMSP.values += {"AnchorPeers":{"mod_policy": "Admins","value":{"anchor_peers": [{"host": "peer0.farmer.auto.com","port": 7051}]},"version": "0"}}' config_copy.json > modified_config.json
+
+configtxlator proto_encode --input config.json --type common.Config --output config.pb
+configtxlator proto_encode --input modified_config.json --type common.Config --output modified_config.pb
+configtxlator compute_update --channel_id ${CHANNEL_NAME} --original config.pb --updated modified_config.pb --output config_update.pb
+
+configtxlator proto_decode --input config_update.pb --type common.ConfigUpdate --output config_update.json
+echo '{"payload":{"header":{"channel_header":{"channel_id":"'$CHANNEL_NAME'", "type":2}},"data":{"config_update":'$(cat config_update.json)'}}}' | jq . > config_update_in_envelope.json
+configtxlator proto_encode --input config_update_in_envelope.json --type common.Envelope --output config_update_in_envelope.pb
+
+cd ..
+
+peer channel update -f channel-artifacts/config_update_in_envelope.pb -c $CHANNEL_NAME -o localhost:7050  --ordererTLSHostnameOverride orderer.auto.com --tls --cafile $ORDERER_CA
+
+
+
+
+
+
+
+**************** peer0_Distributor terminal ******************
+
+
+peer channel fetch config channel-artifacts/config_block.pb -o localhost:7050 --ordererTLSHostnameOverride orderer.auto.com -c $CHANNEL_NAME --tls --cafile $ORDERER_CA
+
+
+cd channel-artifacts
+
+
+
+configtxlator proto_decode --input config_block.pb --type common.Block --output config_block.json
+jq '.data.data[0].payload.data.config' config_block.json > config.json
+cp config.json config_copy.json
+
+jq '.channel_group.groups.Application.groups.DistributorMSP.values += {"AnchorPeers":{"mod_policy": "Admins","value":{"anchor_peers": [{"host": "peer0.distributor.auto.com","port": 9051}]},"version": "0"}}' config_copy.json > modified_config.json
+
+configtxlator proto_encode --input config.json --type common.Config --output config.pb
+configtxlator proto_encode --input modified_config.json --type common.Config --output modified_config.pb
+configtxlator compute_update --channel_id $CHANNEL_NAME --original config.pb --updated modified_config.pb --output config_update.pb
+
+configtxlator proto_decode --input config_update.pb --type common.ConfigUpdate --output config_update.json
+echo '{"payload":{"header":{"channel_header":{"channel_id":"'$CHANNEL_NAME'", "type":2}},"data":{"config_update":'$(cat config_update.json)'}}}' | jq . > config_update_in_envelope.json
+configtxlator proto_encode --input config_update_in_envelope.json --type common.Envelope --output config_update_in_envelope.pb
+
+cd ..
+
+peer channel update -f channel-artifacts/config_update_in_envelope.pb -c $CHANNEL_NAME -o localhost:7050  --ordererTLSHostnameOverride orderer.auto.com --tls --cafile $ORDERER_CA
+
+
+
+
+**************** peer0_Retailer terminal ******************
+
+
+peer channel fetch config channel-artifacts/config_block.pb -o localhost:7050 --ordererTLSHostnameOverride orderer.auto.com -c $CHANNEL_NAME --tls --cafile $ORDERER_CA
+
+
+cd channel-artifacts
+
+configtxlator proto_decode --input config_block.pb --type common.Block --output config_block.json
+jq '.data.data[0].payload.data.config' config_block.json > config.json
+cp config.json config_copy.json
+
+jq '.channel_group.groups.Application.groups.RetailerMSP.values += {"AnchorPeers":{"mod_policy": "Admins","value":{"anchor_peers": [{"host": "peer0.retailer.auto.com","port": 11051}]},"version": "0"}}' config_copy.json > modified_config.json
+
+configtxlator proto_encode --input config.json --type common.Config --output config.pb
+configtxlator proto_encode --input modified_config.json --type common.Config --output modified_config.pb
+configtxlator compute_update --channel_id $CHANNEL_NAME --original config.pb --updated modified_config.pb --output config_update.pb
+
+configtxlator proto_decode --input config_update.pb --type common.ConfigUpdate --output config_update.json
+echo '{"payload":{"header":{"channel_header":{"channel_id":"'$CHANNEL_NAME'", "type":2}},"data":{"config_update":'$(cat config_update.json)'}}}' | jq . > config_update_in_envelope.json
+configtxlator proto_encode --input config_update_in_envelope.json --type common.Envelope --output config_update_in_envelope.pb
+
+cd ..
+peer channel update -f channel-artifacts/config_update_in_envelope.pb -c $CHANNEL_NAME -o localhost:7050  --ordererTLSHostnameOverride orderer.auto.com --tls --cafile $ORDERER_CA
+
+—-----------------Chaincode lifecycle—-------------------
+
+**************** peer0_Farmer terminal ******************
+
+peer lifecycle chaincode package organicfood.tar.gz --path ../Chaincode/ --lang golang --label organicfood_1.0
+
+peer lifecycle chaincode install organicfood.tar.gz
+
+export CC_PACKAGE_ID=$(peer lifecycle chaincode calculatepackageid organicfood.tar.gz)
+
+
+
+**************** peer0_Distributor terminal ******************
+
+
+peer lifecycle chaincode install organicfood.tar.gz
+
+export CC_PACKAGE_ID=$(peer lifecycle chaincode calculatepackageid organicfood.tar.gz)
+
+
+**************** peer0_Retailer terminal ******************
+
+
+peer lifecycle chaincode install organicfood.tar.gz
+
+export CC_PACKAGE_ID=$(peer lifecycle chaincode calculatepackageid organicfood.tar.gz)
+
+
+
+**************** peer0_Farmer terminal ******************
+
+peer lifecycle chaincode approveformyorg -o localhost:7050 --ordererTLSHostnameOverride orderer.auto.com --channelID $CHANNEL_NAME --name organicfood --version 1.0 --collections-config ../Chaincode/collection-food.json --package-id $CC_PACKAGE_ID --sequence 1 --tls --cafile $ORDERER_CA --waitForEvent
+
+
+**************** peer0_Distributor terminal ******************
+
+peer lifecycle chaincode approveformyorg -o localhost:7050 --ordererTLSHostnameOverride orderer.auto.com --channelID $CHANNEL_NAME --name organicfood --version 1.0 --collections-config ../Chaincode/collection-food.json --package-id $CC_PACKAGE_ID --sequence 1 --tls --cafile $ORDERER_CA --waitForEvent
+
+
+**************** peer0_Retailer terminal ******************
+
+peer lifecycle chaincode approveformyorg -o localhost:7050 --ordererTLSHostnameOverride orderer.auto.com --channelID $CHANNEL_NAME --name organicfood --version 1.0 --collections-config ../Chaincode/collection-food.json --package-id $CC_PACKAGE_ID --sequence 1 --tls --cafile $ORDERER_CA --waitForEvent
+
+
+**************** peer0_Farmer terminal ******************
+
+peer lifecycle chaincode checkcommitreadiness --channelID $CHANNEL_NAME --name organicfood --version 1.0 --sequence 2 --collections-config ../Chaincode/collection-food.json --tls --cafile $ORDERER_CA --output json
+
+
+peer lifecycle chaincode commit -o localhost:7050 --ordererTLSHostnameOverride orderer.auto.com --channelID $CHANNEL_NAME --name organicfood --version 1.8 --sequence 8 --collections-config ../Chaincode/collection-food.json --tls --cafile $ORDERER_CA --peerAddresses localhost:7051 --tlsRootCertFiles $FARMER_PEER_TLSROOTCERT --peerAddresses localhost:9051 --tlsRootCertFiles $DISTRIBUTOR_PEER_TLSROOTCERT --peerAddresses localhost:11051 --tlsRootCertFiles $RETAILER_PEER_TLSROOTCERT
+
+
+peer lifecycle chaincode querycommitted --channelID $CHANNEL_NAME --name organicfood --cafile $ORDERER_CA
+
+
+
+
+*********************Invovke **********
+peer chaincode invoke -o localhost:7050 --ordererTLSHostnameOverride orderer.auto.com --tls --cafile $ORDERER_CA -C $CHANNEL_NAME -n organicfood --peerAddresses localhost:7051 --tlsRootCertFiles $FARMER_PEER_TLSROOTCERT --peerAddresses localhost:9051 --tlsRootCertFiles $DISTRIBUTOR_PEER_TLSROOTCERT --peerAddresses localhost:11051 --tlsRootCertFiles $RETAILER_PEER_TLSROOTCERT -c '{"function":"CreateFood","Args":["Food-1", "Vegetable", "India", "100"]}'
+
+
+peer chaincode invoke -o localhost:7050 --ordererTLSHostnameOverride orderer.auto.com --tls --cafile $ORDERER_CA -C $CHANNEL_NAME -n organicfood  -c '{"function":"CreateFood","Args":["Food-1", "Vegetable", "India", "100"]}'
+
+*********************Read **********
+peer chaincode query -C $CHANNEL_NAME -n organicfood --peerAddresses localhost:7051 --tlsRootCertFiles $FARMER_PEER_TLSROOTCERT -c '{"function":"ReadFood","Args":["Food-2"]}'
+
+
+*********************getallfoods **********
+
+
+peer chaincode query -C $CHANNEL_NAME -n organicfood -c '{"Args":["GetAllFoods"]}'
+
+**********************delete food*****************************8888
+
+peer chaincode invoke -o localhost:7050 --ordererTLSHostnameOverride orderer.auto.com --tls --cafile $ORDERER_CA -C $CHANNEL_NAME -n organicfood  -c '{"function":"DeleteFood","Args":["Food-1"]}'
+
+
+
+***********Range Query**********
+
+peer chaincode query -C $CHANNEL_NAME -n organicfood -c '{"function":"GetFoodsByRange","Args":["Food-2", "Food-4"]}'
+
+*******************To invoke the GetFoodHistory function:***************
+
+peer chaincode query -C $CHANNEL_NAME -n organicfood -c '{"function":"GetFoodHistory","Args":["Food-1"]}'
+
+
+
+
+****************************GetFoodsWithPagination*******************************
+peer chaincode query -C $CHANNEL_NAME -n organicfood -c '{"function":"GetFoodsWithPagination","Args":["5", ""]}'
+
+
+
+
+
+		}
+
+		// Parse transient data and set values
+		quantity, exists := transientData["quantity"]
+		if !exists {
+			return "", fmt.Errorf("the quantity was not specified in transient data")
+		}
+		order.Quantity = string(quantity)
+
+		status, exists := transientData["status"]
+		if !exists {
+			return "", fmt.Errorf("the status was not specified in transient data")
+		}
+		order.Status = string(status)
+
+		distributorName, exists := transientData["distributorName"]
+		if !exists {
+			return "", fmt.Errorf("the distributorName was not specified in transient data")
+		}
+		order.DistributorName = string(distributorName)
+
+		productID, exists := transientData["productId"]
+
+
+
+	privateData := map[string][]byte{
+		"quantity":       []byte("100"),
+		"status":      []byte("Delivered"),
+		"distributorName":      []byte("Maruti"),
+		"productId": []byte("Product-1"),
+	}
+
+***************************PDC COMANDS++++SECOND terminal***************************
+export QUANTITY=$(echo -n "100" | base64 | tr -d \\n)
+
+export STATUS=$(echo -n "Disapaced" | base64 | tr -d \\n)
+export DISTRIBUTOR_NAME=$(echo -n "XXX" | base64 | tr -d \\n)
+
+export PRODUCTID=$(echo -n "Product-1" | base64 | tr -d \\n)
+
+**********************invoke******************
+peer chaincode invoke -o localhost:7050 --ordererTLSHostnameOverride orderer.auto.com --tls --cafile $ORDERER_CA -C $CHANNEL_NAME -n organicfood --peerAddresses localhost:7051 --tlsRootCertFiles $FARMER_PEER_TLSROOTCERT --peerAddresses localhost:9051 --tlsRootCertFiles $DISTRIBUTOR_PEER_TLSROOTCERT --peerAddresses localhost:11051 --tlsRootCertFiles $RETAILER_PEER_TLSROOTCERT -c '{"Args":["DistributorContract:CreateOrder","ORD101"]}' --transient "{\"quantity\":\"$QUANTITY\",\"status\":\"$STATUS\",\"distributorName\":\"$DISTRIBUTOR_NAME\",\"productId\":\"$PRODUCTID\"}"
+
+
+8************************ReadOrder**************
+peer chaincode query -C $CHANNEL_NAME -n organicfood -c '{"Args":["DistributorContract:ReadOrder","ORD201"]}'
+
+
+*********************getallfoods **********
+
+peer chaincode query -C $CHANNEL_NAME -n organicfood -c '{"Args":["DistributorContract:GetAllOrders"]}'
+
+***********Range Query**********
+
+peer chaincode query -C $CHANNEL_NAME -n organicfood -c '{"function":"GetOrdersByRange","Args":["ORD101", "ORD103"]}'
+
+
+
+
+
+
+// package main
+
+// import (
+// 	"net/http"
+
+// 	"github.com/gin-gonic/gin"
+// )
+
+// // Food struct represents the data structure for food in the API
+// type Food struct {
+// 	FoodID   string `json:"foodId"`
+// 	Type     string `json:"type"`
+// 	Origin   string `json:"origin"`
+// 	Quantity string `json:"quantity"`
+// 	Status   string `json:"status"`
+// 	Owner    string `json:"owner"`
+// }
+
+// func main() {
+// 	// Initialize Gin router
+// 	router := gin.Default()
+
+// 	// Serve static files (if needed)
+// 	router.Static("/public", "./public")
+// 	router.LoadHTMLGlob("templates/*")
+
+// 	// Home route
+// 	router.GET("/", func(ctx *gin.Context) {
+// 		ctx.HTML(http.StatusOK, "index.html", gin.H{
+// 			"title": "Manufacturer Dashboard",
+// 		})
+// 	})
+
+// 	// Endpoint to create a new food item
+// 	router.POST("/api/food", func(ctx *gin.Context) {
+// 		var req Food
+// 		if err := ctx.BindJSON(&req); err != nil {
+// 			ctx.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
+// 			return
+// 		}
+
+// 		// Call the "CreateFood" function in the contract (assuming submitTxnFn is correctly defined)
+// 		result := submitTxnFn(
+// 			"farmer",                // Client/Org (Farmer)
+// 			"organicchannel",        // Channel name
+// 			"organicfood",           // Chaincode name
+// 			"FoodContract",          // Contract name
+// 			"invoke",                // Action type
+// 			make(map[string][]byte), // Transient data (none in this case)
+// 			"CreateFood",            // Function to invoke
+// 			req.FoodID,              // Food ID
+// 			req.Type,                // Food type
+// 			req.Origin,              // Origin of the food
+// 			req.Quantity,            // Quantity of food
+// 			req.Status,              // Status of food
+// 		)
+
+// 		// Send response
+// 		ctx.JSON(http.StatusOK, gin.H{"message": "Created new food item", "result": result})
+// 	})
+
+// 	// Endpoint to read a food item by ID
+// 	router.GET("/api/food/:id", func(ctx *gin.Context) {
+// 		foodID := ctx.Param("id")
+
+// 		// Call the "ReadFood" function in the contract (assuming submitTxnFn is correctly defined)
+// 		result := submitTxnFn(
+// 			"farmer",                // Client/Org (Farmer)
+// 			"organicchannel",        // Channel name
+// 			"organicfood",           // Chaincode name
+// 			"FoodContract",          // Contract name
+// 			"query",                 // Action type (query)
+// 			make(map[string][]byte), // Transient data (none in this case)
+// 			"ReadFood",              // Function to invoke
+// 			foodID,                  // Food ID
+// 		)
+
+// 		// Send response
+// 		ctx.JSON(http.StatusOK, gin.H{"data": result})
+// 	})
+
+// 	// Endpoint to register a food item
+// 	router.POST("/api/food/register", func(ctx *gin.Context) {
+// 		var req struct {
+// 			FoodID          string `json:"foodId"`
+// 			OwnerName       string `json:"ownerName"`
+// 			RegistrationNum string `json:"registrationNumber"`
+// 		}
+
+// 		if err := ctx.BindJSON(&req); err != nil {
+// 			ctx.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
+// 			return
+// 		}
+
+// 		// Call the "RegisterFood" function in the contract (assuming submitTxnFn is correctly defined)
+// 		result := submitTxnFn(
+// 			"retailer",              // Client/Org (Retailer)
+// 			"organicchannel",        // Channel name
+// 			"organicfood",           // Chaincode name
+// 			"FoodContract",          // Contract name
+// 			"invoke",                // Action type
+// 			make(map[string][]byte), // Transient data (none in this case)
+// 			"RegisterFood",          // Function to invoke
+// 			req.FoodID,              // Food ID
+// 			req.OwnerName,           // Owner name
+// 			req.RegistrationNum,     // Registration number
+// 		)
+
+// 		// Send response
+// 		ctx.JSON(http.StatusOK, gin.H{"message": "Food registered successfully", "result": result})
+// 	})
+
+// 	// Start the Gin server
+// 	router.Run(":3000")
+// }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
